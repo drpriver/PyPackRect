@@ -25,8 +25,6 @@ This is a python binding to the public domain stb_rect_pack.
 See https://github.com/nothings/stb/blob/master/stb_rect_pack.h
 
 '''
-with open('Documentation/OVERVIEW.md', encoding='utf-8') as fp:
-    LONG_DESCRIPTION = fp.read()
 
 setup(
     name='packrect',
