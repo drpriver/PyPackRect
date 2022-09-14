@@ -28,9 +28,9 @@ See https://github.com/nothings/stb/blob/master/stb_rect_pack.h
 
 setup(
     name='packrect',
-    version='1.0.0',
+    version='1.0.1',
     license='Public Domain',
-    description='dndc, but from python',
+    description='Pack Rectangles into a Rectangle',
     long_description=LONG_DESCRIPTION,
     long_description_content_type='text/markdown',
     # url='',
