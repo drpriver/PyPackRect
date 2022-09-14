@@ -28,7 +28,7 @@ See https://github.com/nothings/stb/blob/master/stb_rect_pack.h
 
 setup(
     name='packrect',
-    version='1.0.1',
+    version='1.0.2',
     license='Public Domain',
     description='Pack Rectangles into a Rectangle',
     long_description=LONG_DESCRIPTION,
