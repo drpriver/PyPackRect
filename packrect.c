@@ -1,0 +1,261 @@
+#ifdef _WIN32
+#define _CRT_SECURE_NO_WARNINGS 1
+#endif
+#define USE_PYTHON 1
+
+#define STB_RECT_PACK_IMPLEMENTATION
+#include "stb_rect_pack.h"
+
+#include <assert.h>
+#include <string.h>
+
+#ifdef USE_PYTHON
+#include "pyhead.h"
+#endif
+
+
+static
+int
+pack_them_rects(struct stbrp_node* nodes, int n_nodes, stbrp_rect* rects, int n_rects, int* width, int* height, int max_iters);
+
+static
+int
+pack_rects(struct stbrp_node* nodes, int n_nodes, stbrp_rect*rects, int n_rects, int x, int y);
+
+#ifdef USE_PYTHON
+static
+PyObject*
+pack(PyObject* mod, PyObject* args, PyObject* kwargs);
+
+static
+PyMethodDef packrect_methods[] = {
+    {
+        .ml_name = "pack",
+        .ml_meth = (PyCFunction)pack,
+        .ml_flags = METH_VARARGS|METH_KEYWORDS,
+        .ml_doc = "pack(input, width=0, height=0, max_iters=0)\n"
+                  "--\n"
+                  "\n"
+                  "Packs them rects.\n"
+    },
+    {NULL, NULL, 0, NULL}
+};
+
+static
+PyModuleDef packrect = {
+    .m_base = PyModuleDef_HEAD_INIT,
+    .m_name="packrect",
+    .m_doc= ""
+        "Wrapper around stb_rect_pack.\n"
+        ,
+    .m_size=-1,
+    .m_methods=packrect_methods,
+    .m_slots=NULL,
+    .m_traverse=NULL,
+    .m_clear=NULL,
+    .m_free=NULL,
+};
+
+PyMODINIT_FUNC
+PyInit_packrect(void){
+    PyObject* mod = PyModule_Create(&packrect);
+    return mod;
+}
+
+// returns list of [(x, y, w, h, o), ...], width, height
+// takes sequence of [(w, h, o)]
+static
+PyObject*
+pack(PyObject* mod, PyObject* args, PyObject* kwargs){
+    (void)mod;
+    PyObject* input;
+    int max_iters = 0;
+    int width = 0;
+    int height = 0;
+    const char* const keywords[] = {"input", "width", "height", "max_iters", NULL};
+    if(!PyArg_ParseTupleAndKeywords(args, kwargs, "O|iii:pack", (char**)keywords, &input,  &width, &height, &max_iters)){
+        return NULL;
+    }
+    if(!PySequence_Check(input)){
+        PyErr_SetString(PyExc_TypeError, "input must be a sequence");
+        return NULL;
+    }
+    const Py_ssize_t len = PySequence_Length(input);
+    if(len < 0) return NULL;
+    if(!len) {
+        PyErr_SetString(PyExc_ValueError, "input must be non-empty");
+        return NULL;
+    }
+    // int n_nodes = len*8;
+    int n_nodes = 8000;
+    int n_rects = len;
+    stbrp_rect* rects = PyMem_RawCalloc(n_rects, sizeof *rects);
+    stbrp_node* nodes = PyMem_RawMalloc(n_nodes * sizeof *nodes);
+    if(!nodes || !rects){
+        PyMem_RawFree(rects);
+        PyMem_RawFree(nodes);
+        PyErr_SetString(PyExc_MemoryError, "oom when allocating temp buffers");
+        return NULL;
+    }
+    for(Py_ssize_t i = 0; i < len; i++){
+        PyObject* o = PySequence_GetItem(input, i);
+        if(!o) goto cleanup;
+        PyObject* unused;
+        if(!PyArg_ParseTuple(o, "iiO:pack", &rects[i].w, &rects[i].h, &unused)) goto cleanup;
+        rects[i].id = (int)i;
+        Py_XDECREF(o);
+    }
+    int err = pack_them_rects(nodes, n_nodes, rects, n_rects, &width, &height, max_iters);
+    if(err){
+        PyErr_SetString(PyExc_ValueError, "Failed to pack them rects");
+        goto cleanup;
+    }
+    PyObject* lst = PyList_New(len);
+    if(!lst) goto cleanup;
+    for(Py_ssize_t i = 0; i < len; i++){
+        stbrp_rect* r = &rects[i];
+        PyObject* o = PySequence_GetItem(input, r->id); // new ref
+        if(!o){
+            Py_XDECREF(lst);
+            goto cleanup;
+        }
+        PyObject* obj = PyTuple_GetItem(o, 2); // borrowed
+        if(!obj){
+            Py_XDECREF(o);
+            Py_XDECREF(lst);
+            goto cleanup;
+        }
+        assert(r->was_packed);
+        PyObject* tup = Py_BuildValue("iiiiO", r->x, r->y, r->w, r->h, obj); // new ref
+        Py_XDECREF(o);
+        PyList_SET_ITEM(lst, i, tup); // steals ref
+    }
+    PyMem_RawFree(rects);
+    PyMem_RawFree(nodes);
+    PyObject* result = Py_BuildValue("Oii", lst, width, height);
+    Py_XDECREF(lst);
+    return result;
+
+    if(0){
+        cleanup:
+        PyMem_RawFree(rects);
+        PyMem_RawFree(nodes);
+        return NULL;
+    }
+}
+#endif
+
+
+static
+int
+pack_rects(struct stbrp_node* nodes, int n_nodes, stbrp_rect*rects, int n_rects, int x, int y){
+    if(x <= 0) return 0;
+    if(y <= 0) return 0;
+    memset(nodes, 0, sizeof(*nodes)*n_nodes);
+    for(int i = 0; i < n_rects; i++){
+        rects[i].was_packed = 0;
+        rects[i].x = 0;
+        rects[i].y = 0;
+    }
+    struct stbrp_context ctx = {0};
+    stbrp_init_target(&ctx, x, y, nodes, n_nodes);
+    int packed = stbrp_pack_rects(&ctx, rects, n_rects);
+    return packed;
+}
+
+static
+int
+pack_them_rects(struct stbrp_node* nodes, int n_nodes, stbrp_rect* rects, int n_rects, int* width, int* height, int max_iters){
+    if(max_iters <= 0) max_iters = 10;
+    int w = *width;
+    int h = *height;
+    if(w < 0) return 1;
+    if(h < 0) return 1;
+    if(!w || !h){
+        enum {UPPER=20000};
+        int x_min=w?w:UPPER/2;
+        int y_min=h?h:UPPER/2;
+        if(!pack_rects(nodes, n_nodes, rects, n_rects, x_min, y_min)){
+            return 1;
+        }
+        int best=UPPER/2*UPPER/2;
+        int spread = UPPER/3;
+        int step = spread/4;
+        while(step && max_iters--){
+            int y_ = y_min;
+            int x_ = x_min;
+            if(!w && !h){
+                for(int y = y_-spread; y < y_+spread; y += step){
+                    for(int x = x_-spread; x < x_+spread; x += step){
+                        if(x * y >= best) continue;
+                        if(pack_rects(nodes, n_nodes, rects, n_rects, x, y)){
+                            best = x * y;
+                            x_min = x;
+                            y_min = y;
+                        }
+                    }
+                }
+            }
+            else if(!w){
+                int y = y_min;
+                for(int x = x_-spread; x < x_+spread; x += step){
+                    if(x * y >= best) continue;
+                    if(pack_rects(nodes, n_nodes, rects, n_rects, x, y)){
+                        best = x * y;
+                        x_min = x;
+                    }
+                }
+            }
+            else {
+                int x = x_min;
+                for(int y = y_-spread; y < y_+spread; y += step){
+                    if(x * y >= best) continue;
+                    if(pack_rects(nodes, n_nodes, rects, n_rects, x, y)){
+                        best = x * y;
+                        y_min = y;
+                    }
+                }
+            }
+            spread /= 2;
+            step /= 2;
+        }
+        w = x_min;
+        h = y_min;
+        *width = w;
+        *height = h;
+    }
+    int packed = pack_rects(nodes, n_nodes, rects, n_rects, w, h);
+    if(!packed) return 1;
+    return 0;
+}
+
+
+#ifndef USE_PYTHON
+int main(){
+    stbrp_rect rects[4] = {
+        {
+            .w = 10,
+            .h = 10,
+            .id = 1,
+        },
+        {
+            .w = 20,
+            .h = 20,
+            .id = 2,
+        },
+        {
+            .w = 30,
+            .h = 30,
+            .id = 3,
+        },
+        {
+            .w = 100,
+            .h = 100,
+            .id = 100,
+        },
+    };
+    stbrp_node nodes[800];
+    int packed = pack_rects(nodes, 800, rects, 4, 10000, 10000);
+    return packed;
+}
+#endif
