@@ -14,9 +14,9 @@ civenv:
 wheels: civenv
 	rm -rf dist build
 	rm -f wheelhouse/*.whl
-	. civenv/bin/activate && CIBW_SKIP='{pp*,cp36*,cp37*,cp311*}' cibuildwheel --platform macos --archs x86_64 .
-	. civenv/bin/activate && CIBW_SKIP='{pp*,cp36*,cp37*,cp311*}' cibuildwheel --platform macos --archs arm64 .
-	. civenv/bin/activate && CIBW_SKIP='{pp*,cp36*,cp37*,cp311*}' cibuildwheel --platform macos --archs universal2 .
+	. civenv/bin/activate && CIBW_SKIP='{pp*,cp36*,cp37*}' cibuildwheel --platform macos --archs x86_64 .
+	. civenv/bin/activate && CIBW_SKIP='{pp*,cp36*,cp37*}' cibuildwheel --platform macos --archs arm64 .
+	. civenv/bin/activate && CIBW_SKIP='{pp*,cp36*,cp37*}' cibuildwheel --platform macos --archs universal2 .
 endif
 
 ifeq ($(UNAME),Linux)
@@ -27,7 +27,7 @@ civenv:
 wheels: civenv
 	rm -rf dist build
 	rm -f wheelhouse/*.whl
-	. civenv/bin/activate && CIBW_SKIP='{pp*,*musl*,cp311*}' cibuildwheel --platform linux --archs x86_64 .
+	. civenv/bin/activate && CIBW_SKIP='{pp*,*musl*}' cibuildwheel --platform linux --archs x86_64 .
 endif
 
 ifeq ($(UNAME),Windows)
@@ -37,7 +37,7 @@ civenv:
 
 wheels: civenv
 	del /q dist build
-	civenv\Scripts\activate && cmd /V /C "SET CIBW_SKIP={pp*,cp36*,cp37*,cp311*} && cibuildwheel --platform windows --archs AMD64 ."
+	civenv\Scripts\activate && cmd /V /C "SET CIBW_SKIP={pp*,cp36*,cp37*} && cibuildwheel --platform windows --archs AMD64 ."
 endif
 
 
