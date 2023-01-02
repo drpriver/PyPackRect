@@ -36,7 +36,7 @@ civenv:
 	civenv\Scripts\activate && py -m pip install cibuildwheel && py -m pip install twine
 
 wheels: civenv
-	del /q dist build
+	del /q dist build wheelhouse
 	civenv\Scripts\activate && cmd /V /C "SET CIBW_SKIP={pp*,cp36*,cp37*} && cibuildwheel --platform windows --archs AMD64 ."
 endif
 

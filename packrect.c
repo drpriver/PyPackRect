@@ -1,3 +1,6 @@
+//
+// Copyright © 2022, David Priver
+//
 #ifdef _WIN32
 #define _CRT_SECURE_NO_WARNINGS 1
 #endif
@@ -33,41 +36,45 @@ PyMethodDef packrect_methods[] = {
         .ml_name = "pack",
         .ml_meth = (PyCFunction)pack,
         .ml_flags = METH_VARARGS|METH_KEYWORDS,
-        .ml_doc = "pack(input, width=0, height=0, max_iters=10)\n"
-                  "--\n"
-                  "\n"
-                  "Packs them rects.\n"
-                  "\n"
-                  "Args:\n"
-                  "-----\n"
-                  "input: A sequence of tuples that are (width, height, item)\n"
-                  "       `width` and `height` must be ints, but item can be\n"
-                  "       anything and will be returned back to you in the rects.\n"
-                  "\n"
-                  "width: If non-zero, the packed rect will be no wider than this.\n"
-                  "       Otherwise, the minimum sized rect will be searched for.\n"
-                  "\n"
-                  "height: Like width, but for height.\n"
-                  "\n"
-                  "max_iters: If width or height are zero, how many iterations to\n"
-                  "           try to solve for the minimum-sized rectangle.\n"
-                  "\n"
-                  "Returns:\n"
-                  "--------\n"
-                  "(rects, width, height)\n"
-                  "\n"
-                  "rects:  A list of (x, y, width, height, item) tuples.\n"
-                  "        The item is the original item you passed to input.\n"
-                  "        There is no guarantee on the order of these rects.\n"
-                  "width:  The width of the rectangle that contains the rects.\n"
-                  "height: The height of the rectangle that contains the rects.\n"
-                  "\n"
-                  "Throws:\n"
-                  "-------\n"
-                  "If the rects can't be packed into the rectangle given by width\n"
-                  "and/or height, then ValueError will be thrown.\n"
-                  "ValueError can also be thrown for invalid inputs.\n"
-                  ,
+        .ml_doc =
+        "pack(input, width=0, height=0, max_iters=10)\n"
+        "--\n"
+        "\n"
+        "Packs them rects.\n"
+        "\n"
+        "Args:\n"
+        "-----\n"
+        "input:     A sequence of tuples that are (width, height, item).\n"
+        "           `width` and `height` must be ints, but item can be\n"
+        "           anything and will be returned back to you in the rects.\n"
+        "\n"
+        "width:     If non-zero, the packed rect will be no wider than this.\n"
+        "           Otherwise, the minimum sized rect will be searched for.\n"
+        "\n"
+        "height:    Like width, but for height.\n"
+        "\n"
+        "max_iters: If width or height are zero, how many iterations to try\n"
+        "           to solve for the minimum-sized rectangle.\n"
+        "\n"
+        "Returns:\n"
+        "--------\n"
+        "(rects, width, height)\n"
+        "\n"
+        "rects:  A list of (x, y, width, height, item) tuples.\n"
+        "        The item is the original item you passed to input.\n"
+        "        There is no guarantee on the order of these rects.\n"
+        "\n"
+        "width:  The width of the rectangle that contains the rects.\n"
+        "\n"
+        "height: The height of the rectangle that contains the rects.\n"
+        "\n"
+        "Throws:\n"
+        "-------\n"
+        "If the rects can't be packed into the rectangle given by width\n"
+        "and/or height, then ValueError will be thrown.\n"
+        "\n"
+        "ValueError can also be thrown for invalid inputs.\n"
+        ,
     },
     {NULL, NULL, 0, NULL}
 };
