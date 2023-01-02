@@ -27,7 +27,7 @@ See https://github.com/nothings/stb/blob/master/stb_rect_pack.h
 
 setup(
     name='packrect',
-    version='1.0.2',
+    version='1.0.3',
     license='Public Domain',
     description='Pack Rectangles into a Rectangle',
     long_description=LONG_DESCRIPTION,
@@ -47,6 +47,7 @@ setup(
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
         'Programming Language :: Python :: 3 :: Only',
     ],
     packages=['packrect'],  # Required
