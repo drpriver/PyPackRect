@@ -1,10 +1,9 @@
 //
-// Copyright © 2022, David Priver
+// Copyright © 2022-2024, David Priver
 //
 #ifdef _WIN32
 #define _CRT_SECURE_NO_WARNINGS 1
 #endif
-#define USE_PYTHON 1
 
 #define STB_RECT_PACK_IMPLEMENTATION
 #include "stb_rect_pack.h"
@@ -12,23 +11,70 @@
 #include <assert.h>
 #include <string.h>
 
-#ifdef USE_PYTHON
-#include "pyhead.h"
+#define PY_SSIZE_T_CLEAN
+// Python's pytime.h triggers a visibility warning (at least on windows).
+// We really don't care.
+#ifdef __clang___
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wvisibility"
 #endif
 
+#if defined(_WIN32) && defined(_DEBUG)
+// Windows release of python only ships with release lib, but the _DEBUG macro
+// enables a linker comment to link against the debug lib, which will fail at link time.
+// The offending header is "pyconfig.h" in the python include directory.
+// So undef it.
+#undef _DEBUG
+#include <Python.h>
+#define _DEBUG
 
+#else
+#include <Python.h>
+#endif
+
+#ifdef __clang___
+#pragma clang diagnostic pop
+#endif
+
+#if PY_MAJOR_VERSION < 3
+#error "Only python3 or better is supported"
+#endif
+
+#if PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION < 6
+#error "Only python 3.6 or better is supported"
+#endif
+
+#if PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION < 10
+// Shim for older pythons.
+static inline
+int
+PyModule_AddObjectRef(PyObject* mod, const char* name, PyObject* value){
+    int result = PyModule_AddObject(mod, name, value);
+    if(result == 0){ // 0 is success, so above call stole our ref
+        Py_INCREF(value);
+    }
+    return result;
+}
+#endif
+
+static
+PyObject*
+pack(PyObject* mod, PyObject* args, PyObject* kwargs);
+
+// 0 on success
 static
 int
 pack_them_rects(struct stbrp_node* nodes, int n_nodes, stbrp_rect* rects, int n_rects, int* width, int* height, int max_iters);
 
+// 1 on success, 0 on failure
 static
-int
+_Bool
 pack_rects(struct stbrp_node* nodes, int n_nodes, stbrp_rect*rects, int n_rects, int x, int y);
 
-#ifdef USE_PYTHON
+// 1 if optimal (and sets *width and *height)
 static
-PyObject*
-pack(PyObject* mod, PyObject* args, PyObject* kwargs);
+_Bool
+packing_is_optimal(stbrp_rect* rects, int n_rects, int* width, int* height);
 
 static
 PyMethodDef packrect_methods[] = {
@@ -97,8 +143,8 @@ PyModuleDef packrect = {
 PyMODINIT_FUNC
 PyInit_packrect(void){
     PyObject* mod = PyModule_Create(&packrect);
-    PyModule_AddStringConstant(mod, "__version__", "1.0.2");
-    PyObject* version = Py_BuildValue("iii", 1, 0, 2);
+    PyModule_AddStringConstant(mod, "__version__", "1.0.5");
+    PyObject* version = Py_BuildValue("iii", 1, 0, 5);
     PyModule_AddObjectRef(mod, "version", version);
     Py_XDECREF(version);
     return mod;
@@ -152,6 +198,14 @@ pack(PyObject* mod, PyObject* args, PyObject* kwargs){
         PyErr_SetString(PyExc_ValueError, "Failed to pack them rects");
         goto cleanup;
     }
+    // Set width and height to actual width and height.
+    width = 0; height = 0;
+    for(int i = 0; i < n_rects; i++){
+        int w = rects[i].x + rects[i].w;
+        if(w > width) width = w;
+        int h = rects[i].y + rects[i].h;
+        if(h > height) height = h;
+    }
     PyObject* lst = PyList_New(len);
     if(!lst) goto cleanup;
     for(Py_ssize_t i = 0; i < len; i++){
@@ -178,18 +232,18 @@ pack(PyObject* mod, PyObject* args, PyObject* kwargs){
     Py_XDECREF(lst);
     return result;
 
-    if(0){
+    {
         cleanup:
         PyMem_RawFree(rects);
         PyMem_RawFree(nodes);
         return NULL;
     }
 }
-#endif
 
 
+// 1 on success, 0 on failure
 static
-int
+_Bool
 pack_rects(struct stbrp_node* nodes, int n_nodes, stbrp_rect*rects, int n_rects, int x, int y){
     if(x <= 0) return 0;
     if(y <= 0) return 0;
@@ -205,10 +259,30 @@ pack_rects(struct stbrp_node* nodes, int n_nodes, stbrp_rect*rects, int n_rects,
     return packed;
 }
 
+// 1 if optimal (and sets *width and *height)
+static
+_Bool
+packing_is_optimal(stbrp_rect* rects, int n_rects, int* width, int* height){
+    int total_area = 0;
+    int w = 0, h = 0;
+    for(int i = 0; i < n_rects; i++){
+        total_area += rects[i].w * rects[i].h;
+        if(rects[i].w + rects[i].x > w) w = rects[i].w + rects[i].x;
+        if(rects[i].h + rects[i].y > h) h = rects[i].h + rects[i].y;
+    }
+    if(total_area == w * h){
+        *width = w;
+        *height = h;
+        return 1;
+    }
+    return 0;
+}
+
+// 0 on success
 static
 int
 pack_them_rects(struct stbrp_node* nodes, int n_nodes, stbrp_rect* rects, int n_rects, int* width, int* height, int max_iters){
-    if(max_iters <= 0) max_iters = 10;
+    if(max_iters <= 0) max_iters = 20;
     int w = *width;
     int h = *height;
     if(w < 0) return 1;
@@ -217,9 +291,10 @@ pack_them_rects(struct stbrp_node* nodes, int n_nodes, stbrp_rect* rects, int n_
         enum {UPPER=20000};
         int x_min=w?w:UPPER/2;
         int y_min=h?h:UPPER/2;
-        if(!pack_rects(nodes, n_nodes, rects, n_rects, x_min, y_min)){
+        if(!pack_rects(nodes, n_nodes, rects, n_rects, x_min, y_min))
             return 1;
-        }
+        if(packing_is_optimal(rects, n_rects, width, height))
+            return 0;
         int best=UPPER/2*UPPER/2;
         int spread = UPPER/3;
         int step = spread/4;
@@ -231,6 +306,8 @@ pack_them_rects(struct stbrp_node* nodes, int n_nodes, stbrp_rect* rects, int n_
                     for(int x = x_-spread; x < x_+spread; x += step){
                         if(x * y >= best) continue;
                         if(pack_rects(nodes, n_nodes, rects, n_rects, x, y)){
+                            if(packing_is_optimal(rects, n_rects, width, height))
+                                return 0;
                             best = x * y;
                             x_min = x;
                             y_min = y;
@@ -243,6 +320,8 @@ pack_them_rects(struct stbrp_node* nodes, int n_nodes, stbrp_rect* rects, int n_
                 for(int x = x_-spread; x < x_+spread; x += step){
                     if(x * y >= best) continue;
                     if(pack_rects(nodes, n_nodes, rects, n_rects, x, y)){
+                        if(packing_is_optimal(rects, n_rects, width, height))
+                            return 0;
                         best = x * y;
                         x_min = x;
                     }
@@ -253,6 +332,8 @@ pack_them_rects(struct stbrp_node* nodes, int n_nodes, stbrp_rect* rects, int n_
                 for(int y = y_-spread; y < y_+spread; y += step){
                     if(x * y >= best) continue;
                     if(pack_rects(nodes, n_nodes, rects, n_rects, x, y)){
+                        if(packing_is_optimal(rects, n_rects, width, height))
+                            return 0;
                         best = x * y;
                         y_min = y;
                     }
@@ -270,34 +351,3 @@ pack_them_rects(struct stbrp_node* nodes, int n_nodes, stbrp_rect* rects, int n_
     if(!packed) return 1;
     return 0;
 }
-
-
-#ifndef USE_PYTHON
-int main(){
-    stbrp_rect rects[4] = {
-        {
-            .w = 10,
-            .h = 10,
-            .id = 1,
-        },
-        {
-            .w = 20,
-            .h = 20,
-            .id = 2,
-        },
-        {
-            .w = 30,
-            .h = 30,
-            .id = 3,
-        },
-        {
-            .w = 100,
-            .h = 100,
-            .id = 100,
-        },
-    };
-    stbrp_node nodes[800];
-    int packed = pack_rects(nodes, 800, rects, 4, 10000, 10000);
-    return packed;
-}
-#endif
