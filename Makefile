@@ -8,8 +8,10 @@ endif
 ifeq ($(UNAME),Darwin)
 civenv:
 	python3 -m venv civenv
-	. civenv/bin/activate && python -m pip install cibuildwheel && python -m pip install twine
+	. civenv/bin/activate && python -m pip install cibuildwheel && python -m pip install twine && python -m pip install build
 
+sdist: civenv
+	. civenv/bin/activate && python -m build --sdist -o wheelhouse
 # macos you need to build multiple times
 wheels: civenv
 	rm -rf dist build
@@ -22,7 +24,10 @@ endif
 ifeq ($(UNAME),Linux)
 civenv:
 	python3 -m venv civenv
-	. civenv/bin/activate && python -m pip install cibuildwheel && python -m pip install twine
+	. civenv/bin/activate && python -m pip install cibuildwheel && python -m pip install twine && python -m pip install build
+
+sdist: civenv
+	. civenv/bin/activate && python -m build --sdist -o wheelhouse
 
 wheels: civenv
 	rm -rf dist build
@@ -33,7 +38,10 @@ endif
 ifeq ($(UNAME),Windows)
 civenv:
 	py -m venv civenv
-	civenv\Scripts\activate && py -m pip install cibuildwheel && py -m pip install twine
+	civenv\Scripts\activate && py -m pip install cibuildwheel && py -m pip install twine && py -m pip install build
+
+sdist: civenv
+	civenv/\Scripts\activate && py -m build --sdist -o wheelhouse
 
 wheels: civenv
 	del /q dist build wheelhouse

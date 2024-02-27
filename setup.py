@@ -27,12 +27,12 @@ See https://github.com/nothings/stb/blob/master/stb_rect_pack.h
 
 setup(
     name='packrect',
-    version='1.0.4',
+    version='1.0.5',
     license='Public Domain',
     description='Pack Rectangles into a Rectangle',
     long_description=LONG_DESCRIPTION,
     long_description_content_type='text/markdown',
-    # url='',
+    url='https://github.com/drpriver/PyPackRect',
     author='David Priver',
     author_email='david@davidpriver.com',
     classifiers=[
@@ -48,6 +48,7 @@ setup(
         'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
         'Programming Language :: Python :: 3.11',
+        'Programming Language :: Python :: 3.12',
         'Programming Language :: Python :: 3 :: Only',
     ],
     packages=['packrect'],  # Required
